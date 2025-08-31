@@ -1,53 +1,65 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Country Facts Generator</title>
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Country Facts Generator</title>
+  <link rel="stylesheet" href="styles.css"/>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🌍 Country Facts Generator</h1>
-            <p>Discover fascinating facts about any country!</p>
-        </header>
-        
-        <main>
-            <div class="search-section">
-                <div class="input-group">
-                    <input 
-                        type="text" 
-                        id="countryInput" 
-                        placeholder="Enter a country name..." 
-                        autocomplete="off"
-                    >
-                    <button id="generateBtn">Generate Facts</button>
-                </div>
-                <div id="suggestions" class="suggestions-container"></div>
-            </div>
-            
-            <div class="loading" id="loadingSpinner" style="display: none;">
-                <div class="spinner"></div>
-                <p>Generating fascinating facts...</p>
-            </div>
-            
-            <div class="results-section" id="resultsSection" style="display: none;">
-                <h2 id="countryTitle"></h2>
-                <div class="facts-container" id="factsContainer"></div>
-                <button id="generateMoreBtn" class="secondary-btn">Generate New Facts</button>
-            </div>
-            
-            <div class="error-message" id="errorMessage" style="display: none;">
-                <p>Something went wrong. Please try again.</p>
-            </div>
-        </main>
-        
-        <footer>
-            <p>Powered by OpenAI GPT-3.5-Turbo</p>
-        </footer>
-    </div>
-    
-    <script src="script.js"></script>
+  <div class="container">
+    <header>
+      <h1>🌍 Country Facts Generator</h1>
+      <p>Discover interesting facts about any country</p>
+    </header>
+
+    <main>
+      <div class="search-section">
+        <div id="hfSettings" class="hf-settings" style="margin-bottom:12px;">
+          <label for="hfTokenInput" style="font-size:0.9rem;">Hugging Face Token:</label>
+          <input id="hfTokenInput" type="password" placeholder="hf_..." style="width:220px;"/>
+          <label style="margin-left:10px; font-size:0.9rem;">
+            <input id="useHfDirect" type="checkbox"/>
+            Use Hugging Face Direct (no backend)
+          </label>
+          <button id="saveHfBtn" class="secondary-btn" style="margin-left:8px;">Save</button>
+          <div style="font-size:0.8rem; color:#666; margin-top:6px;">
+            Your token is stored in this browser only. Do not use on public sites.
+          </div>
+        </div>
+        <div class="input-group">
+          <input
+            type="text"
+            id="countryInput"
+            placeholder="Enter a country name..."
+            autocomplete="off"
+          />
+          <button id="generateBtn">Generate Facts</button>
+        </div>
+        <div id="suggestions" class="suggestions-container"></div>
+      </div>
+
+      <div class="loading" id="loadingSpinner" style="display:none;">
+        <div class="spinner"></div>
+        <p>Generating facts...</p>
+      </div>
+
+      <div class="results-section" id="resultsSection" style="display:none;">
+        <h2 id="countryTitle"></h2>
+        <div class="facts-container" id="factsContainer"></div>
+        <button id="generateMoreBtn" class="secondary-btn">Generate New Facts</button>
+      </div>
+
+      <div class="error-message" id="errorMessage" style="display:none;">
+        <p>Something went wrong. Please try again.</p>
+      </div>
+    </main>
+
+    <footer>
+      <p id="powerSource">Powered by: Backend</p>
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
 </body>
 </html>
