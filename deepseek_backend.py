@@ -88,34 +88,50 @@ def parse_facts_from_response(text, country_name):
     
     return facts[:3]
 
-def try_ollama_local(country_name):
-    """Try local Ollama instance if available"""
+def try_huggingface_free(country_name):
+    """Try Hugging Face free inference API without API key"""
     try:
-        prompt = f"Generate exactly 3 fascinating facts about {country_name}. Format each as:\n1. [Title]: [Detailed fact]\n2. [Title]: [Detailed fact]\n3. [Title]: [Detailed fact]"
+        # Use Microsoft Phi-2 which is available for free inference
+        url = "https://api-inference.huggingface.co/models/microsoft/DialoGPT-medium"
+        
+        prompt = f"Generate 3 interesting facts about {country_name}. Format as: 1. Fact one 2. Fact two 3. Fact three"
         
         payload = {
-            "model": "llama2",
-            "prompt": prompt,
-            "stream": False
+            "inputs": prompt,
+            "parameters": {
+                "max_length": 200,
+                "temperature": 0.7,
+                "do_sample": True
+            }
         }
         
-        logger.info("🦙 Trying local Ollama...")
-        response = requests.post(
-            "http://localhost:11434/api/generate",
-            json=payload,
-            timeout=30
-        )
+        logger.info("🤗 Trying Hugging Face free inference...")
+        response = requests.post(url, json=payload, timeout=30)
         
         if response.status_code == 200:
             data = response.json()
-            content = data.get('response', '')
-            if content:
-                facts = parse_facts_from_response(content, country_name)
-                if facts and len(facts) > 0:
-                    return facts, "Llama 2 (Ollama)"
-                    
+            if isinstance(data, list) and len(data) > 0:
+                content = data[0].get('generated_text', '')
+                if content:
+                    facts = parse_facts_from_response(content, country_name)
+                    if facts and len(facts) > 0:
+                        return facts, "DialoGPT (HuggingFace)"
+        
+        # Try alternative free model
+        url2 = "https://api-inference.huggingface.co/models/gpt2"
+        response2 = requests.post(url2, json=payload, timeout=30)
+        
+        if response2.status_code == 200:
+            data2 = response2.json()
+            if isinstance(data2, list) and len(data2) > 0:
+                content = data2[0].get('generated_text', '')
+                if content:
+                    facts = parse_facts_from_response(content, country_name)
+                    if facts and len(facts) > 0:
+                        return facts, "GPT-2 (HuggingFace)"
+                        
     except Exception as e:
-        logger.info(f"Ollama not available: {e}")
+        logger.info(f"HuggingFace free inference failed: {e}")
     
     return None, None
 
@@ -228,8 +244,12 @@ def generate_facts():
         
         logger.info(f"🌍 Generating facts for: {country_name}")
         
-        # Use enhanced knowledge base directly since external APIs require keys
-        facts, model_used = try_creative_generation(country_name)
+        # Try HuggingFace free inference first
+        facts, model_used = try_huggingface_free(country_name)
+        
+        if not facts:
+            # Fallback to knowledge base
+            facts, model_used = try_creative_generation(country_name)
             
         if facts and len(facts) > 0:
             logger.info(f"✅ Successfully generated {len(facts)} facts using {model_used}")
@@ -278,8 +298,12 @@ def chat():
         
         logger.info(f"💬 Chat question about {country_name}: {question}")
         
-        # Use knowledge base for chat responses
-        facts, model_used = try_simple_chat(country_name, question)
+        # Try HuggingFace for chat first
+        facts, model_used = try_huggingface_chat(country_name, question)
+        
+        if not facts:
+            # Fallback to knowledge base for chat responses
+            facts, model_used = try_simple_chat(country_name, question)
             
         if facts:
             return jsonify({
@@ -298,32 +322,37 @@ def chat():
         logger.error(f"❌ Error in chat: {str(e)}")
         return jsonify({"error": f"Internal server error: {str(e)}"}), 500
 
-def try_ollama_chat(country_name, question):
-    """Handle chat questions using Ollama if available"""
+def try_huggingface_chat(country_name, question):
+    """Handle chat questions using HuggingFace free inference"""
     try:
-        prompt = f"Answer this question about {country_name}: {question}"
+        prompt = f"Question about {country_name}: {question}\nAnswer:"
         
         payload = {
-            "model": "llama2",
-            "prompt": prompt,
-            "stream": False
+            "inputs": prompt,
+            "parameters": {
+                "max_length": 150,
+                "temperature": 0.7,
+                "do_sample": True
+            }
         }
         
-        logger.info("🦙 Trying Ollama for chat...")
-        response = requests.post(
-            "http://localhost:11434/api/generate",
-            json=payload,
-            timeout=20
-        )
+        logger.info("🤗 Trying HuggingFace for chat...")
+        
+        # Try DialoGPT for conversational responses
+        url = "https://api-inference.huggingface.co/models/microsoft/DialoGPT-medium"
+        response = requests.post(url, json=payload, timeout=20)
         
         if response.status_code == 200:
             data = response.json()
-            content = data.get('response', '').strip()
-            if content and len(content) > 10:
-                return content, "Llama 2 (Ollama)"
+            if isinstance(data, list) and len(data) > 0:
+                content = data[0].get('generated_text', '').strip()
+                if content and len(content) > 10:
+                    # Clean up the response
+                    answer = content.replace(prompt, '').strip()
+                    return answer if answer else content, "DialoGPT (HuggingFace)"
             
     except Exception as e:
-        logger.info(f"Ollama chat not available: {e}")
+        logger.info(f"HuggingFace chat not available: {e}")
     
     return None, None
 
