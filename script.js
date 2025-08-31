@@ -134,12 +134,18 @@ class CountryFactsApp {
             const facts = await this.fetchCountryFacts(countryName, apiKey);
             this.displayFacts(countryName, facts);
         } catch (error) {
-            if (error.message.includes('API_KEY_INVALID') || error.message.includes('401')) {
-                this.showError('Invalid API key. Please check your Gemini API key.');
-            } else {
-                this.showError('Failed to generate facts. Please try again.');
-            }
             console.error('Error generating facts:', error);
+            if (error.message.includes('403') || error.message.includes('API_KEY_INVALID')) {
+                this.showError('Invalid API key. Please check your Gemini API key.');
+            } else if (error.message.includes('400')) {
+                this.showError('Bad request. Please try with a different country name.');
+            } else if (error.message.includes('429')) {
+                this.showError('Rate limit exceeded. Please wait a moment and try again.');
+            } else if (error.message.includes('500')) {
+                this.showError('Server error. Please try again in a few minutes.');
+            } else {
+                this.showError(`Error: ${error.message}`);
+            }
         }
     }
     
@@ -163,7 +169,7 @@ class CountryFactsApp {
             {"title": "Cultural Treasure", "content": "The national dish was invented by accident in 1847."}
         ]`;
         
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -182,10 +188,18 @@ class CountryFactsApp {
         });
         
         if (!response.ok) {
-            throw new Error(`API request failed: ${response.status}`);
+            const errorData = await response.json().catch(() => ({}));
+            console.error('API Error:', response.status, errorData);
+            throw new Error(`API request failed: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
         }
         
         const data = await response.json();
+        console.log('API Response:', data); // For debugging
+        
+        if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+            throw new Error('Invalid response format from API');
+        }
+        
         const generatedText = data.candidates[0].content.parts[0].text;
         
         try {
