@@ -7,6 +7,8 @@ class CountryFactsApp {
     }
     
     initializeElements() {
+        this.apiKeyInput = document.getElementById('apiKeyInput');
+        this.toggleApiKeyBtn = document.getElementById('toggleApiKey');
         this.countryInput = document.getElementById('countryInput');
         this.generateBtn = document.getElementById('generateBtn');
         this.generateMoreBtn = document.getElementById('generateMoreBtn');
@@ -16,6 +18,12 @@ class CountryFactsApp {
         this.countryTitle = document.getElementById('countryTitle');
         this.factsContainer = document.getElementById('factsContainer');
         this.errorMessage = document.getElementById('errorMessage');
+        
+        // Load API key from localStorage if exists
+        const savedApiKey = localStorage.getItem('gemini_api_key');
+        if (savedApiKey) {
+            this.apiKeyInput.value = savedApiKey;
+        }
     }
     
     async loadCountriesList() {
@@ -29,6 +37,8 @@ class CountryFactsApp {
     }
     
     attachEventListeners() {
+        this.apiKeyInput.addEventListener('input', this.saveApiKey.bind(this));
+        this.toggleApiKeyBtn.addEventListener('click', this.toggleApiKeyVisibility.bind(this));
         this.countryInput.addEventListener('input', this.handleInputChange.bind(this));
         this.countryInput.addEventListener('keypress', this.handleKeyPress.bind(this));
         this.generateBtn.addEventListener('click', this.generateFacts.bind(this));
@@ -86,8 +96,30 @@ class CountryFactsApp {
         this.suggestionsContainer.style.display = 'none';
     }
     
+    saveApiKey() {
+        const apiKey = this.apiKeyInput.value.trim();
+        if (apiKey) {
+            localStorage.setItem('gemini_api_key', apiKey);
+        } else {
+            localStorage.removeItem('gemini_api_key');
+        }
+    }
+    
+    toggleApiKeyVisibility() {
+        const isPassword = this.apiKeyInput.type === 'password';
+        this.apiKeyInput.type = isPassword ? 'text' : 'password';
+        this.toggleApiKeyBtn.textContent = isPassword ? '🙈' : '👁️';
+        this.toggleApiKeyBtn.title = isPassword ? 'Hide API Key' : 'Show API Key';
+    }
+
     async generateFacts() {
         const countryName = this.countryInput.value.trim();
+        const apiKey = this.apiKeyInput.value.trim();
+        
+        if (!apiKey) {
+            this.showError('Please enter your Gemini API key first');
+            return;
+        }
         
         if (!countryName) {
             this.showError('Please enter a country name');
@@ -99,16 +131,19 @@ class CountryFactsApp {
         this.hideSuggestions();
         
         try {
-            const facts = await this.fetchCountryFacts(countryName);
+            const facts = await this.fetchCountryFacts(countryName, apiKey);
             this.displayFacts(countryName, facts);
         } catch (error) {
-            this.showError('Failed to generate facts. Please try again.');
+            if (error.message.includes('API_KEY_INVALID') || error.message.includes('401')) {
+                this.showError('Invalid API key. Please check your Gemini API key.');
+            } else {
+                this.showError('Failed to generate facts. Please try again.');
+            }
             console.error('Error generating facts:', error);
         }
     }
     
-    async fetchCountryFacts(countryName) {
-        const API_KEY = 'YOUR_GEMINI_API_KEY_HERE'; // You'll replace this
+    async fetchCountryFacts(countryName, apiKey) {
         
         const prompt = `Generate exactly 3 interesting and unique fun facts about ${countryName}. 
         Each fact should be:
@@ -128,7 +163,7 @@ class CountryFactsApp {
             {"title": "Cultural Treasure", "content": "The national dish was invented by accident in 1847."}
         ]`;
         
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${API_KEY}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
