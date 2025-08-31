@@ -7,8 +7,6 @@ class CountryFactsApp {
     }
     
     initializeElements() {
-        this.apiKeyInput = document.getElementById('apiKeyInput');
-        this.toggleApiKeyBtn = document.getElementById('toggleApiKey');
         this.countryInput = document.getElementById('countryInput');
         this.generateBtn = document.getElementById('generateBtn');
         this.generateMoreBtn = document.getElementById('generateMoreBtn');
@@ -18,12 +16,6 @@ class CountryFactsApp {
         this.countryTitle = document.getElementById('countryTitle');
         this.factsContainer = document.getElementById('factsContainer');
         this.errorMessage = document.getElementById('errorMessage');
-        
-        // Load API key from localStorage if exists
-        const savedApiKey = localStorage.getItem('gemini_api_key');
-        if (savedApiKey) {
-            this.apiKeyInput.value = savedApiKey;
-        }
     }
     
     async loadCountriesList() {
@@ -37,8 +29,6 @@ class CountryFactsApp {
     }
     
     attachEventListeners() {
-        this.apiKeyInput.addEventListener('input', this.saveApiKey.bind(this));
-        this.toggleApiKeyBtn.addEventListener('click', this.toggleApiKeyVisibility.bind(this));
         this.countryInput.addEventListener('input', this.handleInputChange.bind(this));
         this.countryInput.addEventListener('keypress', this.handleKeyPress.bind(this));
         this.generateBtn.addEventListener('click', this.generateFacts.bind(this));
@@ -96,30 +86,8 @@ class CountryFactsApp {
         this.suggestionsContainer.style.display = 'none';
     }
     
-    saveApiKey() {
-        const apiKey = this.apiKeyInput.value.trim();
-        if (apiKey) {
-            localStorage.setItem('gemini_api_key', apiKey);
-        } else {
-            localStorage.removeItem('gemini_api_key');
-        }
-    }
-    
-    toggleApiKeyVisibility() {
-        const isPassword = this.apiKeyInput.type === 'password';
-        this.apiKeyInput.type = isPassword ? 'text' : 'password';
-        this.toggleApiKeyBtn.textContent = isPassword ? '🙈' : '👁️';
-        this.toggleApiKeyBtn.title = isPassword ? 'Hide API Key' : 'Show API Key';
-    }
-
     async generateFacts() {
         const countryName = this.countryInput.value.trim();
-        const apiKey = this.apiKeyInput.value.trim();
-        
-        if (!apiKey) {
-            this.showError('Please enter your Gemini API key first');
-            return;
-        }
         
         if (!countryName) {
             this.showError('Please enter a country name');
@@ -131,92 +99,101 @@ class CountryFactsApp {
         this.hideSuggestions();
         
         try {
-            const facts = await this.fetchCountryFacts(countryName, apiKey);
+            const facts = await this.fetchCountryFacts(countryName);
             this.displayFacts(countryName, facts);
         } catch (error) {
             console.error('Error generating facts:', error);
-            if (error.message.includes('403') || error.message.includes('API_KEY_INVALID')) {
-                this.showError('Invalid API key. Please check your Gemini API key.');
-            } else if (error.message.includes('400')) {
-                this.showError('Bad request. Please try with a different country name.');
-            } else if (error.message.includes('429')) {
+            if (error.message.includes('429')) {
                 this.showError('Rate limit exceeded. Please wait a moment and try again.');
-            } else if (error.message.includes('500')) {
-                this.showError('Server error. Please try again in a few minutes.');
+            } else if (error.message.includes('503')) {
+                this.showError('Service temporarily unavailable. Please try again in a few seconds.');
             } else {
-                this.showError(`Error: ${error.message}`);
+                this.showError('Failed to generate facts. Please try again.');
             }
         }
     }
     
-    async fetchCountryFacts(countryName, apiKey) {
+    async fetchCountryFacts(countryName) {
+        const prompt = `Generate 3 interesting fun facts about ${countryName}. Each fact should be educational and fascinating. Format as: 1. Fact one 2. Fact two 3. Fact three`;
         
-        const prompt = `Generate exactly 3 interesting and unique fun facts about ${countryName}. 
-        Each fact should be:
-        - Fascinating and not commonly known
-        - Educational yet entertaining
-        - Historically or culturally significant
-        - Around 1-2 sentences long
-        
-        Format your response as a JSON array with exactly 3 objects, each having:
-        - "title": A catchy title for the fact
-        - "content": The actual fact content
-        
-        Example format:
-        [
-            {"title": "Ancient Wonder", "content": "This country has the world's oldest continuously operating library."},
-            {"title": "Natural Marvel", "content": "It's home to a lake that changes color with the seasons."},
-            {"title": "Cultural Treasure", "content": "The national dish was invented by accident in 1847."}
-        ]`;
-        
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+        // Using Hugging Face Inference API with a free text generation model
+        const response = await fetch('https://api-inference.huggingface.co/models/microsoft/DialoGPT-large', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                contents: [{
-                    parts: [{
-                        text: prompt
-                    }]
-                }],
-                generationConfig: {
-                    temperature: 0.9,
-                    maxOutputTokens: 1000,
+                inputs: prompt,
+                parameters: {
+                    max_length: 200,
+                    temperature: 0.8,
+                    return_full_text: false
                 }
             })
         });
         
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            console.error('API Error:', response.status, errorData);
-            throw new Error(`API request failed: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+            // If DialoGPT doesn't work, try another free model
+            const fallbackResponse = await fetch('https://api-inference.huggingface.co/models/gpt2', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    inputs: prompt,
+                    parameters: {
+                        max_length: 150,
+                        temperature: 0.7,
+                        return_full_text: false
+                    }
+                })
+            });
+            
+            if (!fallbackResponse.ok) {
+                throw new Error(`API request failed: ${response.status}`);
+            }
+            
+            const fallbackData = await fallbackResponse.json();
+            return this.parseFactsFromText(fallbackData[0].generated_text, countryName);
         }
         
         const data = await response.json();
-        console.log('API Response:', data); // For debugging
+        return this.parseFactsFromText(data[0].generated_text, countryName);
+    }
+    
+    parseFactsFromText(text, countryName) {
+        // Parse the generated text and create structured facts
+        const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 20);
+        const facts = [];
         
-        if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
-            throw new Error('Invalid response format from API');
-        }
-        
-        const generatedText = data.candidates[0].content.parts[0].text;
-        
-        try {
-            const jsonMatch = generatedText.match(/\[[\s\S]*\]/);
-            if (jsonMatch) {
-                return JSON.parse(jsonMatch[0]);
+        // Create 3 facts from the generated text
+        for (let i = 0; i < 3 && i < sentences.length; i++) {
+            const fact = sentences[i].trim();
+            if (fact) {
+                facts.push({
+                    title: `Fact ${i + 1}`,
+                    content: fact + (fact.endsWith('.') ? '' : '.')
+                });
             }
-            throw new Error('No JSON found in response');
-        } catch (parseError) {
-            console.error('Failed to parse JSON:', generatedText);
-            return [
-                {
-                    title: "Interesting Fact",
-                    content: `Here's what I found about ${countryName}: ${generatedText.substring(0, 200)}...`
-                }
-            ];
         }
+        
+        // If we don't have enough facts, add some generic ones
+        while (facts.length < 3) {
+            const genericFacts = [
+                `${countryName} has a unique cultural heritage that spans centuries.`,
+                `The geography of ${countryName} offers diverse landscapes and natural wonders.`,
+                `${countryName} has contributed significantly to world history and civilization.`,
+                `The people of ${countryName} have rich traditions and customs.`,
+                `${countryName} plays an important role in its region's economy and politics.`
+            ];
+            
+            facts.push({
+                title: `Interesting Fact`,
+                content: genericFacts[facts.length] || `${countryName} is a fascinating country with much to discover.`
+            });
+        }
+        
+        return facts.slice(0, 3);
     }
     
     displayFacts(countryName, facts) {

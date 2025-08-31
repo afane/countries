@@ -20,7 +20,7 @@ body {
 
 header {
     text-align: center;
-    margin-bottom: 30px;
+    margin-bottom: 40px;
     color: white;
 }
 
@@ -33,67 +33,6 @@ header h1 {
 header p {
     font-size: 1.2rem;
     opacity: 0.9;
-}
-
-.api-section {
-    background: white;
-    border-radius: 15px;
-    padding: 25px;
-    margin-bottom: 20px;
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-}
-
-.api-input-group {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    margin-bottom: 10px;
-}
-
-.api-input-group label {
-    font-weight: 600;
-    color: #333;
-    white-space: nowrap;
-    font-size: 1rem;
-}
-
-#apiKeyInput {
-    flex: 1;
-    padding: 12px 15px;
-    font-size: 1rem;
-    border: 2px solid #e1e5e9;
-    border-radius: 8px;
-    outline: none;
-    transition: border-color 0.3s ease;
-    font-family: monospace;
-}
-
-#apiKeyInput:focus {
-    border-color: #667eea;
-}
-
-.toggle-btn {
-    background: #f8f9fa;
-    border: 2px solid #e1e5e9;
-    padding: 12px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    font-size: 1rem;
-    min-width: 45px;
-    text-align: center;
-}
-
-.toggle-btn:hover {
-    background: #e9ecef;
-    border-color: #667eea;
-}
-
-.api-note {
-    font-size: 0.85rem;
-    color: #666;
-    margin: 0;
-    font-style: italic;
 }
 
 .search-section {
@@ -320,20 +259,6 @@ footer {
     
     header h1 {
         font-size: 2rem;
-    }
-    
-    .api-input-group {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 10px;
-    }
-    
-    .api-input-group label {
-        text-align: center;
-    }
-    
-    .api-section {
-        padding: 20px;
     }
     
     .input-group {
