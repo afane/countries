@@ -139,59 +139,39 @@ class CountryFactsApp {
             return curatedFacts;
         }
         
-        // Try DeepSeek API as fallback
-        console.log('🤖 Trying DeepSeek API fallback...');
+        // Try local DeepSeek backend API
+        console.log('🤖 Trying local DeepSeek backend...');
         try {
-            const prompt = `Generate exactly 3 fascinating and unique facts about ${countryName}. Format each fact as a numbered item with a catchy title. Make them educational but entertaining.`;
-            
-            // Using DeepSeek's free API
-            const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+            const response = await fetch('http://localhost:5000/generate-facts', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + 'free-trial-key', // DeepSeek offers free trials
                 },
                 body: JSON.stringify({
-                    model: 'deepseek-chat',
-                    messages: [
-                        {
-                            role: 'user',
-                            content: prompt
-                        }
-                    ],
-                    max_tokens: 300,
-                    temperature: 0.8
+                    country: countryName
                 })
             });
             
-            console.log('🤖 DeepSeek API response status:', response.status);
+            console.log('🤖 Local DeepSeek API response status:', response.status);
             
             if (response.ok) {
                 const data = await response.json();
-                console.log('🤖 DeepSeek API response data:', data);
+                console.log('🤖 Local DeepSeek API response data:', data);
                 
-                if (data && data.choices && data.choices[0] && data.choices[0].message) {
-                    const generatedText = data.choices[0].message.content;
-                    console.log('🤖 Generated text from DeepSeek:', generatedText);
-                    const parsedFacts = this.parseFactsFromText(generatedText, countryName);
-                    console.log('🤖 Parsed DeepSeek facts:', parsedFacts);
-                    return parsedFacts;
+                if (data && data.facts && Array.isArray(data.facts) && data.facts.length > 0) {
+                    console.log('✅ Using DeepSeek-generated facts');
+                    return data.facts;
                 }
             } else {
-                // If DeepSeek requires a real API key, fall back to a different approach
-                console.log('🤖 DeepSeek requires API key, trying alternative...');
-                return await this.tryAlternativeAI(countryName);
+                const errorData = await response.json().catch(() => ({}));
+                console.warn('🤖 Local DeepSeek API error:', response.status, errorData);
             }
         } catch (error) {
-            console.warn('🤖 DeepSeek API failed:', error);
-            return await this.tryAlternativeAI(countryName);
+            console.warn('🤖 Local DeepSeek API failed (server not running?):', error.message);
         }
         
-        // Ultimate fallback - generic educational facts
-        console.log('🔄 Using generic fallback facts...');
-        const genericFacts = this.getGenericFacts(countryName);
-        console.log('🔄 Generic facts:', genericFacts);
-        return genericFacts;
+        console.log('🤖 DeepSeek backend not available, using alternative...');
+        return await this.tryAlternativeAI(countryName);
     }
     
     parseFactsFromText(text, countryName) {
