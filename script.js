@@ -114,27 +114,18 @@ class CountryFactsApp {
     }
     
     async fetchCountryFacts(countryName) {
-        const prompt = `Generate 3 interesting fun facts about ${countryName}. Each fact should be educational and fascinating. Format as: 1. Fact one 2. Fact two 3. Fact three`;
+        // First try to get facts from our curated database
+        const curatedFacts = this.getCuratedFacts(countryName);
+        if (curatedFacts) {
+            return curatedFacts;
+        }
         
-        // Using Hugging Face Inference API with a free text generation model
-        const response = await fetch('https://api-inference.huggingface.co/models/microsoft/DialoGPT-large', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                inputs: prompt,
-                parameters: {
-                    max_length: 200,
-                    temperature: 0.8,
-                    return_full_text: false
-                }
-            })
-        });
-        
-        if (!response.ok) {
-            // If DialoGPT doesn't work, try another free model
-            const fallbackResponse = await fetch('https://api-inference.huggingface.co/models/gpt2', {
+        // Try free AI API as fallback
+        try {
+            const prompt = `Tell me 3 interesting facts about ${countryName}:`;
+            
+            // Using a more reliable free text completion API
+            const response = await fetch('https://api-inference.huggingface.co/models/gpt2', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -142,23 +133,28 @@ class CountryFactsApp {
                 body: JSON.stringify({
                     inputs: prompt,
                     parameters: {
-                        max_length: 150,
-                        temperature: 0.7,
+                        max_length: 200,
+                        temperature: 0.8,
+                        do_sample: true,
                         return_full_text: false
                     }
                 })
             });
             
-            if (!fallbackResponse.ok) {
-                throw new Error(`API request failed: ${response.status}`);
+            if (response.ok) {
+                const data = await response.json();
+                console.log('API Response:', data);
+                
+                if (data && data[0] && data[0].generated_text) {
+                    return this.parseFactsFromText(data[0].generated_text, countryName);
+                }
             }
-            
-            const fallbackData = await fallbackResponse.json();
-            return this.parseFactsFromText(fallbackData[0].generated_text, countryName);
+        } catch (error) {
+            console.warn('AI API failed, using fallback facts:', error);
         }
         
-        const data = await response.json();
-        return this.parseFactsFromText(data[0].generated_text, countryName);
+        // Ultimate fallback - generic educational facts
+        return this.getGenericFacts(countryName);
     }
     
     parseFactsFromText(text, countryName) {
@@ -194,6 +190,67 @@ class CountryFactsApp {
         }
         
         return facts.slice(0, 3);
+    }
+    
+    getCuratedFacts(countryName) {
+        const country = countryName.toLowerCase();
+        const factsDatabase = {
+            'japan': [
+                { title: "Vending Machine Paradise", content: "Japan has over 5 million vending machines, selling everything from hot coffee to fresh flowers - that's one vending machine for every 25 people!" },
+                { title: "Ancient Meets Modern", content: "Japan has the world's oldest continuous monarchy, with Emperor Naruhito being the 126th emperor in an unbroken line dating back over 2,600 years." },
+                { title: "Island Nation", content: "Japan consists of 6,852 islands, though only about 430 are inhabited, making it one of the most geographically complex countries in the world." }
+            ],
+            'france': [
+                { title: "Cheese Champion", content: "France produces over 350 types of cheese, and it's said that you could eat a different French cheese every day for an entire year!" },
+                { title: "Most Visited Country", content: "France is the world's most visited country, welcoming over 89 million tourists annually - more than its entire population!" },
+                { title: "Time Zone Record", content: "France spans 12 different time zones, more than any other country, due to its overseas territories around the globe." }
+            ],
+            'brazil': [
+                { title: "Amazon Powerhouse", content: "Brazil contains about 60% of the Amazon rainforest, which produces approximately 20% of the world's oxygen." },
+                { title: "Coffee King", content: "Brazil has been the world's largest coffee producer for over 150 years, producing about one-third of all coffee globally." },
+                { title: "Carnival Capital", content: "Rio de Janeiro's Carnival is the world's largest carnival celebration, attracting over 2 million people daily during the festival." }
+            ],
+            'egypt': [
+                { title: "Ancient Wonder", content: "The Great Pyramid of Giza was the tallest man-made structure in the world for over 3,800 years until the Eiffel Tower was built." },
+                { title: "Nile Lifeline", content: "The Nile River, flowing through Egypt, is the longest river in the world at 4,135 miles and has been Egypt's lifeline for over 5,000 years." },
+                { title: "Hieroglyphic Legacy", content: "Ancient Egyptians used over 700 different hieroglyphic symbols, and the Rosetta Stone was the key to deciphering this ancient writing system." }
+            ],
+            'india': [
+                { title: "Language Diversity", content: "India recognizes 22 official languages and has over 1,600 spoken languages, making it one of the most linguistically diverse countries on Earth." },
+                { title: "Spice Origin", content: "India is known as the 'Spice Bowl of the World' and produces 70% of the world's spices, including black pepper, cardamom, and turmeric." },
+                { title: "Chess Birthplace", content: "Chess was invented in India around the 6th century AD, originally called 'Chaturanga,' meaning 'four divisions of the army.'" }
+            ],
+            'italy': [
+                { title: "Pasta Perfection", content: "Italy has over 350 different pasta shapes, each designed to pair perfectly with specific sauces and regional ingredients." },
+                { title: "UNESCO Champion", content: "Italy has the most UNESCO World Heritage Sites of any country with 58 sites, showcasing its incredible historical and cultural wealth." },
+                { title: "Volcano Land", content: "Italy has three active volcanoes: Mount Etna, Stromboli, and Mount Vesuvius, with Mount Etna being Europe's most active volcano." }
+            ],
+            'australia': [
+                { title: "Unique Wildlife", content: "Australia is home to more than 80% of animals and plants that exist nowhere else on Earth, including kangaroos, koalas, and the platypus." },
+                { title: "Massive Country", content: "Australia is the 6th largest country by land area but has a population of only 26 million people, making it one of the least densely populated countries." },
+                { title: "Great Barrier Reef", content: "The Great Barrier Reef is the world's largest coral reef system and can be seen from space - it's larger than the Great Wall of China!" }
+            ],
+            'canada': [
+                { title: "Freshwater Giant", content: "Canada has more freshwater than any other country, containing about 20% of the world's fresh water in its lakes and rivers." },
+                { title: "Maple Syrup Monopoly", content: "Canada produces 71% of the world's maple syrup, with Quebec alone accounting for 90% of Canada's production." },
+                { title: "Coastline Champion", content: "Canada has the world's longest coastline at 202,080 kilometers, longer than the coastlines of all other countries combined!" }
+            ]
+        };
+        
+        return factsDatabase[country] || null;
+    }
+    
+    getGenericFacts(countryName) {
+        const templates = [
+            `${countryName} has a rich cultural heritage that reflects centuries of history and tradition.`,
+            `The geography of ${countryName} offers diverse landscapes from mountains to valleys, each with unique characteristics.`,
+            `${countryName} has made significant contributions to world culture, art, science, or international relations.`
+        ];
+        
+        return templates.map((content, index) => ({
+            title: `Cultural Heritage ${index + 1}`,
+            content: content
+        }));
     }
     
     displayFacts(countryName, facts) {
