@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Country Facts Generator</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🌍 Country Facts Generator</h1>
+            <p>Discover fascinating facts about any country!</p>
+        </header>
+        
+        <main>
+            <div class="search-section">
+                <div class="input-group">
+                    <input 
+                        type="text" 
+                        id="countryInput" 
+                        placeholder="Enter a country name..." 
+                        autocomplete="off"
+                    >
+                    <button id="generateBtn">Generate Facts</button>
+                </div>
+                <div id="suggestions" class="suggestions-container"></div>
+            </div>
+            
+            <div class="loading" id="loadingSpinner" style="display: none;">
+                <div class="spinner"></div>
+                <p>Generating fascinating facts...</p>
+            </div>
+            
+            <div class="results-section" id="resultsSection" style="display: none;">
+                <h2 id="countryTitle"></h2>
+                <div class="facts-container" id="factsContainer"></div>
+                <button id="generateMoreBtn" class="secondary-btn">Generate New Facts</button>
+            </div>
+            
+            <div class="error-message" id="errorMessage" style="display: none;">
+                <p>Something went wrong. Please try again.</p>
+            </div>
+        </main>
+        
+        <footer>
+            <p>Powered by Gemini AI</p>
+        </footer>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
