@@ -88,39 +88,59 @@ class CountryFactsApp {
     
     async generateFacts() {
         const countryName = this.countryInput.value.trim();
+        console.log('🔍 Starting generateFacts for:', countryName);
         
         if (!countryName) {
+            console.log('❌ No country name provided');
             this.showError('Please enter a country name');
             return;
         }
         
+        console.log('⏳ Showing loading spinner');
         this.showLoading();
         this.hideError();
         this.hideSuggestions();
         
         try {
+            console.log('🚀 Calling fetchCountryFacts...');
             const facts = await this.fetchCountryFacts(countryName);
+            console.log('✅ Got facts:', facts);
+            
+            if (!facts || !Array.isArray(facts) || facts.length === 0) {
+                console.error('❌ Facts is empty or invalid:', facts);
+                throw new Error('No facts returned');
+            }
+            
+            console.log('📄 Displaying facts');
             this.displayFacts(countryName, facts);
         } catch (error) {
-            console.error('Error generating facts:', error);
+            console.error('❌ Error in generateFacts:', error);
+            this.hideLoading();
             if (error.message.includes('429')) {
                 this.showError('Rate limit exceeded. Please wait a moment and try again.');
             } else if (error.message.includes('503')) {
                 this.showError('Service temporarily unavailable. Please try again in a few seconds.');
             } else {
-                this.showError('Failed to generate facts. Please try again.');
+                this.showError(`Failed to generate facts: ${error.message}`);
             }
         }
     }
     
     async fetchCountryFacts(countryName) {
+        console.log('🔍 fetchCountryFacts called with:', countryName);
+        
         // First try to get facts from our curated database
+        console.log('📚 Checking curated facts database...');
         const curatedFacts = this.getCuratedFacts(countryName);
-        if (curatedFacts) {
+        console.log('📚 Curated facts result:', curatedFacts);
+        
+        if (curatedFacts && Array.isArray(curatedFacts) && curatedFacts.length > 0) {
+            console.log('✅ Using curated facts');
             return curatedFacts;
         }
         
         // Try free AI API as fallback
+        console.log('🤖 Trying AI API fallback...');
         try {
             const prompt = `Tell me 3 interesting facts about ${countryName}:`;
             
@@ -141,20 +161,27 @@ class CountryFactsApp {
                 })
             });
             
+            console.log('🤖 AI API response status:', response.status);
+            
             if (response.ok) {
                 const data = await response.json();
-                console.log('API Response:', data);
+                console.log('🤖 AI API response data:', data);
                 
                 if (data && data[0] && data[0].generated_text) {
-                    return this.parseFactsFromText(data[0].generated_text, countryName);
+                    const parsedFacts = this.parseFactsFromText(data[0].generated_text, countryName);
+                    console.log('🤖 Parsed AI facts:', parsedFacts);
+                    return parsedFacts;
                 }
             }
         } catch (error) {
-            console.warn('AI API failed, using fallback facts:', error);
+            console.warn('🤖 AI API failed:', error);
         }
         
         // Ultimate fallback - generic educational facts
-        return this.getGenericFacts(countryName);
+        console.log('🔄 Using generic fallback facts...');
+        const genericFacts = this.getGenericFacts(countryName);
+        console.log('🔄 Generic facts:', genericFacts);
+        return genericFacts;
     }
     
     parseFactsFromText(text, countryName) {
@@ -254,11 +281,30 @@ class CountryFactsApp {
     }
     
     displayFacts(countryName, facts) {
+        console.log('📄 displayFacts called with:', countryName, facts);
+        
         this.hideLoading();
+        console.log('📄 Loading hidden');
+        
+        if (!this.countryTitle) {
+            console.error('❌ countryTitle element not found!');
+            return;
+        }
+        
+        if (!this.factsContainer) {
+            console.error('❌ factsContainer element not found!');
+            return;
+        }
+        
+        if (!this.resultsSection) {
+            console.error('❌ resultsSection element not found!');
+            return;
+        }
         
         this.countryTitle.textContent = `🌍 ${countryName}`;
+        console.log('📄 Country title set');
         
-        this.factsContainer.innerHTML = facts.map((fact, index) => `
+        const factsHTML = facts.map((fact, index) => `
             <div class="fact-card" style="animation-delay: ${index * 0.2}s">
                 <div class="fact-number">${index + 1}</div>
                 <h3 class="fact-title">${fact.title}</h3>
@@ -266,8 +312,15 @@ class CountryFactsApp {
             </div>
         `).join('');
         
+        console.log('📄 Generated HTML:', factsHTML);
+        this.factsContainer.innerHTML = factsHTML;
+        console.log('📄 Facts container updated');
+        
         this.resultsSection.style.display = 'block';
+        console.log('📄 Results section shown');
+        
         this.resultsSection.scrollIntoView({ behavior: 'smooth' });
+        console.log('📄 Scrolled to results');
     }
     
     showLoading() {
@@ -296,5 +349,29 @@ class CountryFactsApp {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    new CountryFactsApp();
+    const app = new CountryFactsApp();
+    
+    // Add test function to global scope for debugging
+    window.testCountryFacts = async (countryName = 'Japan') => {
+        console.log('🧪 Testing country facts for:', countryName);
+        try {
+            const facts = await app.fetchCountryFacts(countryName);
+            console.log('🧪 Test result:', facts);
+            return facts;
+        } catch (error) {
+            console.error('🧪 Test failed:', error);
+            return null;
+        }
+    };
+    
+    // Test curated facts immediately
+    console.log('🧪 Testing curated facts on load...');
+    const testResult = app.getCuratedFacts('Japan');
+    console.log('🧪 Japan curated facts test:', testResult);
+    
+    if (!testResult) {
+        console.error('🧪 CRITICAL: Curated facts not working!');
+    } else {
+        console.log('✅ Curated facts working correctly');
+    }
 });
