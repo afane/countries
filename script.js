@@ -129,68 +129,152 @@ class CountryFactsApp {
     async fetchCountryFacts(countryName) {
         console.log('🔍 fetchCountryFacts called with:', countryName);
         
-        // Try to generate AI-like facts using a simple template system
-        console.log('🤖 Generating AI-powered facts...');
+        // Try real AI first - OpenAI GPT
+        console.log('🤖 Trying OpenAI API...');
         try {
-            const aiFacts = await this.generateAIFacts(countryName);
-            if (aiFacts && aiFacts.length > 0) {
-                this.currentModelUsed = "AI Fact Generator";
-                return aiFacts;
+            const realAIFacts = await this.callOpenAI(countryName);
+            if (realAIFacts && realAIFacts.length > 0) {
+                console.log('✅ Using OpenAI');
+                this.currentModelUsed = "GPT-3.5-Turbo (OpenAI)";
+                return realAIFacts;
             }
         } catch (error) {
-            console.error('AI generation failed:', error);
+            console.error('OpenAI failed:', error);
         }
         
-        // Fallback to curated facts
+        // Fallback to curated facts only if AI fails
         const curatedFacts = this.getCuratedFacts(countryName);
         if (curatedFacts && Array.isArray(curatedFacts) && curatedFacts.length > 0) {
-            console.log('✅ Using curated facts');
-            this.currentModelUsed = "Curated Database";
+            console.log('⚠️ Using curated facts (API failed)');
+            this.currentModelUsed = "Curated Database (API Failed)";
             return curatedFacts;
         }
         
         // Final fallback
-        console.log('🤖 Using intelligent fallback...');
-        this.currentModelUsed = "Intelligent System";
+        console.log('❌ All failed, using generic');
+        this.currentModelUsed = "Generic System (All Failed)";
         return this.generateIntelligentFacts(countryName);
     }
     
+    async callOpenAI(countryName) {
+        const apiKey = prompt("Enter your OpenAI API key (get one free at https://platform.openai.com):");
+        if (!apiKey) {
+            throw new Error("No API key provided");
+        }
+        
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+                model: "gpt-3.5-turbo",
+                messages: [{
+                    role: "user",
+                    content: `Generate exactly 3 fascinating, unique facts about ${countryName}. Format each fact as a JSON object with "title" and "content" fields. Make the facts educational and interesting.`
+                }],
+                max_tokens: 300,
+                temperature: 0.8
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`OpenAI API error: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        const content = data.choices[0].message.content;
+        
+        // Try to parse the response as facts
+        return this.parseAIResponse(content, countryName);
+    }
+    
+    parseAIResponse(content, countryName) {
+        const facts = [];
+        
+        // Try to extract facts from the AI response
+        const lines = content.split('\n').filter(line => line.trim());
+        let factCount = 1;
+        
+        for (const line of lines) {
+            if (line.includes(countryName) && line.length > 30) {
+                facts.push({
+                    title: `AI Fact ${factCount}`,
+                    content: line.replace(/^\d+\.\s*/, '').trim()
+                });
+                factCount++;
+                if (facts.length >= 3) break;
+            }
+        }
+        
+        // If we couldn't parse properly, create facts from the content
+        if (facts.length === 0) {
+            const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 20);
+            for (let i = 0; i < Math.min(3, sentences.length); i++) {
+                facts.push({
+                    title: `AI Generated Fact ${i + 1}`,
+                    content: sentences[i].trim() + '.'
+                });
+            }
+        }
+        
+        return facts.slice(0, 3);
+    }
+    
     async generateAIFacts(countryName) {
-        // Generate facts using a pattern-based approach that looks AI-generated
-        const templates = [
-            "Did you know that {country} has a unique {aspect} that makes it {adjective}? This {feature} has been {development} for over {number} years.",
-            "In {country}, there's an interesting {phenomenon} where {detail}. This makes {country} one of the {superlative} countries in {region}.",
-            "One fascinating thing about {country} is how its {characteristic} influences {effect}. Studies show that {statistic} of people {action}."
+        // Generate 3 completely different facts using varied templates
+        const factTemplates = [
+            {
+                title: "Historical Heritage",
+                template: "Did you know that {country} has a {period}-year history of {tradition}? This ancient practice of {activity} has shaped modern {aspect} throughout the region."
+            },
+            {
+                title: "Geographic Marvel", 
+                template: "The landscape of {country} features {geographic} formations that are {adjective}. These {terrain} cover approximately {percentage}% of the country and attract {visitors} visitors annually."
+            },
+            {
+                title: "Cultural Innovation",
+                template: "In {country}, the unique blend of {culture1} and {culture2} influences has created a distinctive {result}. Local {people} have developed {innovation} that reflects their {heritage}."
+            }
         ];
         
-        const facts = [];
-        const aspects = ['cultural tradition', 'geographical feature', 'historical legacy', 'natural resource', 'architectural style'];
-        const adjectives = ['remarkable', 'distinctive', 'extraordinary', 'fascinating', 'unique'];
-        const features = ['tradition', 'practice', 'system', 'phenomenon', 'characteristic'];
-        const developments = ['evolving', 'developing', 'flourishing', 'thriving', 'growing'];
-        const numbers = ['100', '200', '300', '500', '800', '1000'];
+        const replacements = {
+            period: ['500', '800', '1200', '1500', '2000'],
+            tradition: ['craftsmanship', 'storytelling', 'agricultural techniques', 'architectural methods', 'artistic expression'],
+            activity: ['weaving', 'metalwork', 'pottery', 'music creation', 'dance'],
+            aspect: ['society', 'communities', 'festivals', 'daily life', 'education'],
+            geographic: ['mountain', 'coastal', 'desert', 'forest', 'river'],
+            adjective: ['breathtaking', 'remarkable', 'extraordinary', 'stunning', 'magnificent'],
+            terrain: ['peaks', 'valleys', 'coastlines', 'plateaus', 'plains'],
+            percentage: ['15', '25', '35', '45', '60'],
+            visitors: ['thousands of', 'millions of', 'countless', 'international', 'adventurous'],
+            culture1: ['indigenous', 'traditional', 'ancient', 'regional', 'historical'],
+            culture2: ['modern', 'contemporary', 'international', 'neighboring', 'colonial'],
+            result: ['architectural style', 'culinary tradition', 'artistic movement', 'social custom', 'celebration'],
+            people: ['artisans', 'communities', 'families', 'residents', 'inhabitants'],
+            innovation: ['techniques', 'practices', 'ceremonies', 'festivals', 'traditions'],
+            heritage: ['rich cultural background', 'ancestral wisdom', 'historical experiences', 'diverse influences', 'unique identity']
+        };
         
+        const facts = [];
+        
+        // Generate exactly 3 different facts using different templates
         for (let i = 0; i < 3; i++) {
-            const template = templates[Math.floor(Math.random() * templates.length)];
-            let fact = template
-                .replace(/{country}/g, countryName)
-                .replace(/{aspect}/g, aspects[Math.floor(Math.random() * aspects.length)])
-                .replace(/{adjective}/g, adjectives[Math.floor(Math.random() * adjectives.length)])
-                .replace(/{feature}/g, features[Math.floor(Math.random() * features.length)])
-                .replace(/{development}/g, developments[Math.floor(Math.random() * developments.length)])
-                .replace(/{number}/g, numbers[Math.floor(Math.random() * numbers.length)])
-                .replace(/{phenomenon}/g, 'cultural pattern')
-                .replace(/{detail}/g, 'local customs blend with modern practices')
-                .replace(/{superlative}/g, 'most culturally rich')
-                .replace(/{region}/g, 'the world')
-                .replace(/{characteristic}/g, 'diverse heritage')
-                .replace(/{effect}/g, 'daily life and social interactions')
-                .replace(/{statistic}/g, 'approximately 70%')
-                .replace(/{action}/g, 'actively participate in traditional celebrations');
-                
+            const factData = factTemplates[i];
+            let content = factData.template;
+            
+            // Replace all placeholders with random values
+            content = content.replace(/{country}/g, countryName);
+            Object.keys(replacements).forEach(key => {
+                const values = replacements[key];
+                const randomValue = values[Math.floor(Math.random() * values.length)];
+                content = content.replace(new RegExp(`{${key}}`, 'g'), randomValue);
+            });
+            
             facts.push({
-                title: `Cultural Insight ${i + 1}`,
-                content: fact
+                title: factData.title,
+                content: content
             });
         }
         
