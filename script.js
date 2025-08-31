@@ -10,8 +10,15 @@ class CountryFactsApp {
       this.hf = {
         token: localStorage.getItem("hf_token") || "",
         enabled: localStorage.getItem("hf_enabled") === "1",
-        model: "microsoft/Phi-3-mini-4k-instruct"
+        model: localStorage.getItem("hf_model") || "microsoft/Phi-3-mini-4k-instruct",
+        candidates: [
+          "microsoft/Phi-3-mini-4k-instruct",
+          "microsoft/Phi-3.5-mini-instruct",
+          "microsoft/Phi-3-mini-128k-instruct",
+          "microsoft/phi-2"
+        ]
       };
+      this.debugLogs = [];
   
       this.initEls();
       this.loadCountriesList();
@@ -36,6 +43,7 @@ class CountryFactsApp {
       this.useHfDirect = document.getElementById("useHfDirect");
       this.saveHfBtn = document.getElementById("saveHfBtn");
       this.powerSource = document.getElementById("powerSource");
+      this.debugLog = document.getElementById("debugLog");
     }
   
     async loadCountriesList() {
@@ -140,13 +148,15 @@ class CountryFactsApp {
         this.renderFacts(country, facts);
       } catch (e) {
         this.showError(`Failed to generate facts: ${e.message}`);
+        this.debug("GenerateFacts error", e && e.stack ? e.stack : String(e));
       }
     }
   
     async fetchCountryFacts(country) {
       if (this.hf.enabled) {
+        this.debug("HF mode on", `model=${this.hf.model}`);
         const facts = await this.hfGenerateFacts(country);
-        this.currentModelUsed = "Phi-3-mini (Hugging Face)";
+        this.currentModelUsed = `${this.hf.model} (Hugging Face)`;
         this.updatePowerSource();
         return facts;
       }
@@ -225,7 +235,7 @@ class CountryFactsApp {
           if (this.hf.enabled) {
             const reply = await this.hfChat(this.currentCountry, q);
             text = this.escape(reply || "No answer");
-            model = this.escape("Phi-3-mini (Hugging Face)");
+            model = this.escape(`${this.hf.model} (Hugging Face)`);
           } else {
             const r = await fetch(`${this.API_BASE}/chat`, {
               method: "POST",
@@ -268,7 +278,7 @@ class CountryFactsApp {
 
     updatePowerSource() {
       if (!this.powerSource) return;
-      this.powerSource.textContent = `Powered by: ${this.hf.enabled ? "Hugging Face (Phi-3-mini)" : "Backend"}`;
+      this.powerSource.textContent = `Powered by: ${this.hf.enabled ? `Hugging Face (${this.hf.model})` : "Backend"}`;
     }
 
     showHint(msg) {
@@ -288,11 +298,14 @@ class CountryFactsApp {
 
     async hfGenerate(prompt, parameters = {}) {
       if (!this.hf.enabled) throw new Error("HF direct mode disabled");
-      const url = `https://api-inference.huggingface.co/models/${this.hf.model}?wait_for_model=true`;
-      const resp = await fetch(url, {
-        method: "POST",
-        headers: this.hfHeaders(),
-        body: JSON.stringify({
+      const tried = new Set();
+      const models = [this.hf.model, ...this.hf.candidates.filter(m => m !== this.hf.model)];
+      let lastError = null;
+      for (const m of models) {
+        if (tried.has(m)) continue;
+        tried.add(m);
+        const url = `https://api-inference.huggingface.co/models/${m}?wait_for_model=true`;
+        const payload = {
           inputs: prompt,
           parameters: Object.assign({
             max_new_tokens: 384,
@@ -300,19 +313,42 @@ class CountryFactsApp {
             top_p: 0.95,
             repetition_penalty: 1.05
           }, parameters)
-        })
-      });
-      if (!resp.ok) {
-        if (resp.status === 401) throw new Error("Invalid Hugging Face token");
-        if (resp.status === 403) throw new Error("Model access denied or gated");
-        if (resp.status === 429) throw new Error("Hugging Face rate limit");
-        throw new Error(`HF error ${resp.status}`);
+        };
+        try {
+          const resp = await fetch(url, { method: "POST", headers: this.hfHeaders(), body: JSON.stringify(payload) });
+          const text = await resp.text();
+          if (!resp.ok) {
+            const snippet = text ? text.slice(0, 200) : "";
+            this.debug(`HF HTTP ${resp.status} for ${m}`, snippet);
+            if (resp.status === 404 || resp.status === 403) {
+              lastError = new Error(`HF ${resp.status} for ${m}: ${snippet}`);
+              continue; // try next candidate
+            }
+            if (resp.status === 401) throw new Error("Invalid Hugging Face token");
+            if (resp.status === 429) throw new Error("Hugging Face rate limit (429)");
+            throw new Error(`HF error ${resp.status}: ${snippet}`);
+          }
+          // Parse JSON from text
+          let data;
+          try { data = JSON.parse(text); } catch { data = text; }
+          // Success — switch model if needed and persist
+          if (m !== this.hf.model) {
+            this.hf.model = m;
+            localStorage.setItem("hf_model", m);
+            this.debug("Switched HF model", m);
+            this.updatePowerSource();
+          }
+          if (Array.isArray(data) && data.length > 0 && data[0].generated_text) return data[0].generated_text;
+          if (data && data.generated_text) return data.generated_text;
+          if (Array.isArray(data) && data.length && data[0].token) return data.map(t => (t.token && t.token.text) || "").join("");
+          return typeof data === "string" ? data : JSON.stringify(data);
+        } catch (e) {
+          lastError = e;
+          this.debug(`HF request failed for ${m}`, (e && e.stack) ? e.stack : String(e));
+          continue;
+        }
       }
-      const data = await resp.json();
-      if (Array.isArray(data) && data.length > 0 && data[0].generated_text) return data[0].generated_text;
-      if (data && data.generated_text) return data.generated_text;
-      if (Array.isArray(data) && data.length && data[0].token) return data.map(t => (t.token && t.token.text) || "").join("");
-      return typeof data === "string" ? data : JSON.stringify(data);
+      throw lastError || new Error("Hugging Face request failed for all candidate models");
     }
 
     async hfGenerateFacts(country) {
@@ -321,6 +357,7 @@ class CountryFactsApp {
       const text = await this.hfGenerate(prompt, { max_new_tokens: 420, temperature: 0.6 });
       const facts = this.extractJsonArray(text);
       if (!facts || !Array.isArray(facts) || facts.length === 0) {
+        this.debug("HF parsing error", text);
         throw new Error("HF returned no parsable facts");
       }
       return facts.slice(0, 4).map((f, i) => ({
@@ -346,6 +383,15 @@ class CountryFactsApp {
         }
       } catch {}
       return null;
+    }
+
+    debug(message, details) {
+      const time = new Date().toISOString().split("T")[1].replace("Z", "");
+      const line = details ? `[${time}] ${message}: ${details}` : `[${time}] ${message}`;
+      console.log(line);
+      this.debugLogs.push(line);
+      if (this.debugLogs.length > 200) this.debugLogs.splice(0, this.debugLogs.length - 200);
+      if (this.debugLog) this.debugLog.textContent = this.debugLogs.join("\n");
     }
   }
   
